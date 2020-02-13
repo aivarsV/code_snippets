@@ -1,0 +1,56 @@
+# outputs transformation, that should be made on $base object, to get $other object
+# use with:
+# jq --argfile base base.json --argfile other test.json -f changes -n
+# result is in following format
+#{
+#  deleted : [ paths to deleted items ],
+#  overrides : [{ path : path to overriden object,
+#              value : object}]
+#}
+
+
+def filter_shortest_path: . as $all | $all |
+             map(. as $p | $all | 
+                 map(if length < ($p | length) then . else empty end) |
+                 map( . as $i | length as $l | $i == ($p | .[:$l])) | 
+                 if any then empty else $p end);
+
+def filter_longest_path: . as $all | $all |
+             map(. as $p | $all |
+                 map(if length > ($p | length) then . else empty end) |
+                 map( . as $i | $p | length as $l | $p == ($i | .[:$l])) |
+                 if any then empty else $p end);
+
+def list_missing_paths: $base | [paths] |
+                        map(. as $f | $other | [paths] |
+                            map(. == $f) |
+                            if any then empty else $f end) |
+                        filter_shortest_path | sort | reverse;
+
+
+def list_overriden_items: $other | [paths] |
+                          map(. as $f | $base | [paths] |
+                              map(. == $f) |
+                              if any then empty else $f end) |
+                        # store list of new item paths in variable
+                          filter_shortest_path as $added |
+                        # create list of changed items
+                          $other | [paths] |
+                          map(. as $f | $base | [paths] |
+                              map(. == $f) |
+                              if any then $f else empty end) |
+                          map(. as $p |
+                              if ($base | getpath($p)) != ($other | getpath($p)) then $p
+                              else empty end) |
+                          filter_longest_path | 
+                        # leave only value changes and remove key additions and deletions
+                          map(. as $p | $added  + list_missing_paths |
+                              map(if length - 1 == ($p | length) then . else empty end |
+                                  .[:-1] == $p) |
+                              if any then empty else $p end) |
+                        # combine two lists of paths
+                          . + $added | sort |
+                          map({"path":., "value":(. as $p | $other | getpath($p))});
+
+
+{"deleted": list_missing_paths, "overrides": list_overriden_items}
