@@ -1,0 +1,18 @@
+pkgname=sasl2-oauth
+pkgver=0.1+gc1d7cd07
+pkgrel=1
+arch=(x86_64)
+_commit=c1d7cd0719c233c89307b7406f92a01602a85993
+source=("$pkgname-$pkgver::https://github.com/robn/sasl2-oauth/archive/$_commit.zip")
+sha256sums=('e14b03317c31efc01b4a69442ba2b9118778488f29c9c86a3350576868fab910')
+
+build() {
+	cd "$pkgname-$_commit"
+	autoreconf -f -i
+	./configure --prefix=/usr
+}
+
+package() {
+	cd "$srcdir/$pkgname-$_commit"
+	make DESTDIR="$pkgdir" install
+}
