@@ -32,7 +32,8 @@ sample_feed = """<?xml version="1.0" encoding="UTF-8" ?>
 """
 
 
-def main(address, atom_file):
+def main(address, atom_file, contactsFile=None):
+    contacts = None
     server_address = gethostbyname_ex(address)[-1][0]
     session = requests.Session()
     inbox_link = f'http://{server_address}/html/smsinbox.html'
@@ -68,9 +69,22 @@ def main(address, atom_file):
     feed_updated = False
 
     for message in sms_parsed_list.find('Messages').findall('Message'):
+        if contacts is None:
+            if contactsFile is not None:
+                with open(contactsFile, 'r') as f:
+                    contacts = f.readlines()
+
+            else:
+                contacts = []
+
         content = message.findtext('Content')
         sender = message.findtext('Phone')
-        title = ' > '.join((sender, content[0:min(len(content), 20)]))
+        if sender.startswith('+'):
+            for c in contacts:
+                if c.startswith(sender):
+                    sender = c[len(sender) + 1:].strip()
+
+        title = '({0})=>{1}'.format(sender, content[0:min(len(content), 20)])
         received = datetime.fromisoformat(message.findtext('Date')).replace(tzinfo=tzone)
 
         latest_date = max(latest_date, received)
@@ -88,6 +102,7 @@ def main(address, atom_file):
             break
 
         if existing_entry is None:
+
             entry = ET.Element('entry')
             e = ET.Element('title')
             e.text = title
@@ -126,4 +141,4 @@ def main(address, atom_file):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)
