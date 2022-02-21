@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+# Script fetches received sms messages from Huawei HiLink web interface
+#   and stores them in atom feed
+
+import requests
+import re
+import sys
+import socket
+from time import sleep
+
+post_payload = b"""
+<?xml version="1.0" encoding="UTF-8"?><request><Control>1</Control></request>
+"""
+
+def internet(host="8.8.8.8", port=53, timeout=3):
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect((host, port))
+        return True
+    except socket.error as ex:
+        print(ex)
+        return False
+
+
+def reboot(address):
+    server_address = socket.gethostbyname_ex(address)[-1][0]
+    session = requests.Session()
+    reboot_link = f'http://{server_address}/html/reboot.html'
+    html_text = session.get(reboot_link).text
+    tokens = re.findall(r'(?:<meta name="csrf_token" content="([-A-Za-z0-9+/=]*)"\/>)', html_text)
+
+    resp = session.post(f'http://{server_address}/api/device/control',
+                            data=post_payload,
+                            headers={'__RequestVerificationToken':tokens[0]})
+
+    print("should reboot soon")
+
+def main(address, check_connection):
+    if check_connection:
+        for i in range(5):
+            print(f"Attempting to connect {i}...")
+            if internet():
+                print("Success!")
+                return
+        print("Failure!")
+        sleep(3)
+
+    reboot(address)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1], int(sys.argv[2]) > 0)
